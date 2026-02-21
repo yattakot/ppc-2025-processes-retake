@@ -2,11 +2,11 @@
 
 #include <mpi.h>
 
-#include <numeric>
 #include <vector>
+#include <algorithm>
+#include <cstddef>
 
 #include "kulikov_d_matrix_vector_multiply/common/include/common.hpp"
-#include "util/include/util.hpp"
 
 namespace kulikov_d_matrix_vector_multiply {
 
@@ -22,7 +22,7 @@ bool KulikovDMatrixMultiplyMPI::ValidationImpl() {
     return false;
   }
 
-  if (input.matrix.size() != static_cast<size_t>(input.rows * input.cols)) {
+  if (input.matrix.size() != static_cast<size_t>(input.rows) * static_cast<size_t>(input.cols)) {
     return false;
   }
 
@@ -47,7 +47,8 @@ bool KulikovDMatrixMultiplyMPI::PreProcessingImpl() {
 bool KulikovDMatrixMultiplyMPI::RunImpl() {
   const auto &input = GetInput();
 
-  int rank = 0, size = 0;
+  int rank = 0;
+  int size = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
@@ -60,21 +61,21 @@ bool KulikovDMatrixMultiplyMPI::RunImpl() {
   int base_rows = rows / size;
   int remainder = rows % size;
   int local_rows = base_rows + (rank < remainder ? 1 : 0);
-  int start_row = rank * base_rows + std::min(rank, remainder);
+  int start_row = (rank * base_rows) + std::min(rank, remainder);
 
   std::vector<int> local_result(local_rows, 0);
   for (int i = 0; i < local_rows; ++i) {
     int sum = 0;
     int global_row = start_row + i;
     for (int j = 0; j < cols; ++j) {
-      sum += input.matrix[global_row * cols + j] * vec[j];
+      sum += input.matrix[(global_row * cols) + j] * vec[j];
     }
     local_result[i] = sum;
   }
 
   std::vector<int> recv_counts(size, base_rows);
-  for (int p = 0; p < remainder; ++p) {
-    recv_counts[p] += 1;
+  for (int proc = 0; proc < remainder; ++proc) {
+    recv_counts[proc] += 1;
   }
 
   std::vector<int> displs(size, 0);

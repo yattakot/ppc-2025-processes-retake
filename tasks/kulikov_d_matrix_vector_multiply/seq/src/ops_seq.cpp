@@ -1,10 +1,10 @@
 #include "kulikov_d_matrix_vector_multiply/seq/include/ops_seq.hpp"
 
-#include <numeric>
+#include <algorithm>
+#include <cstddef>
 #include <vector>
 
 #include "kulikov_d_matrix_vector_multiply/common/include/common.hpp"
-#include "util/include/util.hpp"
 
 namespace kulikov_d_matrix_vector_multiply {
 
@@ -20,7 +20,7 @@ bool KulikovDMatrixMultiplySEQ::ValidationImpl() {
     return false;
   }
 
-  if (input.matrix.size() != static_cast<size_t>(input.rows * input.cols)) {
+  if (input.matrix.size() != static_cast<size_t>(input.rows) * static_cast<size_t>(input.cols)) {
     return false;
   }
 
@@ -47,7 +47,7 @@ bool KulikovDMatrixMultiplySEQ::RunImpl() {
     int sum = 0;
 
     for (int j = 0; j < input.cols; j++) {
-      sum += input.matrix[i * input.cols + j] * input.vector[j];
+      sum += input.matrix[(i * input.cols) + j] * input.vector[j];
     }
 
     result[i] = sum;
