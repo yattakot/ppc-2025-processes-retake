@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include <mpi.h>
 
+#include <array>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -31,23 +33,23 @@ class KulikovMatrixMultiplyRunFuncTests : public ppc::util::BaseRunFuncTests<InT
 
     switch (case_id) {
       case 0:  // 1x1
-        input_data_ = {1, 1, {5}, {3}};
+        input_data_ = {.rows = 1, .cols = 1, .matrix = {5}, .vector = {3}};
         expected_ = {15};
         break;
       case 1:  // 1x4
-        input_data_ = {1, 4, {1, 2, 3, 4}, {1, 1, 1, 1}};
+        input_data_ = {.rows = 1, .cols = 4, .matrix = {1, 2, 3, 4}, .vector = {1, 1, 1, 1}};
         expected_ = {10};
         break;
       case 2:  // 4x1
-        input_data_ = {4, 1, {1, 2, 3, 4}, {2}};
+        input_data_ = {.rows = 4, .cols = 1, .matrix = {1, 2, 3, 4}, .vector = {2}};
         expected_ = {2, 4, 6, 8};
         break;
       case 3:  // 3x3
-        input_data_ = {3, 3, {1, 2, 3, 4, 5, 6, 7, 8, 9}, {1, 2, 3}};
+        input_data_ = {.rows = 3, .cols = 3, .matrix = {1, 2, 3, 4, 5, 6, 7, 8, 9}, .vector = {1, 2, 3}};
         expected_ = {14, 32, 50};
         break;
       case 4:  // zeros
-        input_data_ = {3, 3, std::vector<int>(9, 0), std::vector<int>(3, 0)};
+        input_data_ = {.rows = 3, .cols = 3, .matrix = std::vector<int>(9, 0), .vector = std::vector<int>(3, 0)};
         expected_ = {0, 0, 0};
         break;
       default:

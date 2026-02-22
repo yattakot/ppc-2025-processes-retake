@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <mpi.h>
 
+#include <cstddef>
 #include <random>
 #include <string>
 #include <vector>
@@ -14,8 +15,8 @@ namespace kulikov_d_matrix_vector_multiply {
 
 class KulikovMatrixMultiplyRunPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  protected:
-  InType input_data_;
-  std::vector<int> expected_data_;
+  InType input_data;
+  std::vector<int> expected_data;
 
   void SetUp() override {
     const auto &param = GetParam();
@@ -34,27 +35,27 @@ class KulikovMatrixMultiplyRunPerfTests : public ppc::util::BaseRunPerfTests<InT
       cols = 1000;
     }
 
-    input_data_.rows = rows;
-    input_data_.cols = cols;
-    input_data_.matrix.resize(static_cast<size_t>(rows * cols));
-    input_data_.vector.resize(static_cast<size_t>(cols));
-    expected_data_.resize(static_cast<size_t>(rows));
+    input_data.rows = rows;
+    input_data.cols = cols;
+    input_data.matrix.resize(static_cast<size_t>(rows) * static_cast<size_t>(cols));
+    input_data.vector.resize(static_cast<size_t>(cols));
+    expected_data.resize(static_cast<size_t>(rows));
 
-    std::mt19937 gen(42);
+    std::mt19937 gen(42); // NOLINT(cert-msc51-cpp)
     std::uniform_int_distribution<int> dist(-5, 5);
 
     for (int j = 0; j < cols; ++j) {
-      input_data_.vector[j] = dist(gen);
+      input_data.vector[j] = dist(gen);
     }
 
     for (int i = 0; i < rows; ++i) {
       int sum = 0;
       for (int j = 0; j < cols; ++j) {
         const int val = dist(gen);
-        input_data_.matrix[i * cols + j] = val;
-        sum += val * input_data_.vector[j];
+        input_data.matrix[(i * cols) + j] = val;
+        sum += val * input_data.vector[j];
       }
-      expected_data_[i] = sum;
+      expected_data[i] = sum;
     }
   }
 
@@ -66,12 +67,12 @@ class KulikovMatrixMultiplyRunPerfTests : public ppc::util::BaseRunPerfTests<InT
       return true;
     }
 
-    if (output_data.size() != expected_data_.size()) {
+    if (output_data.size() != expected_data.size()) {
       return false;
     }
 
     for (size_t i = 0; i < output_data.size(); ++i) {
-      if (output_data[i] != expected_data_[i]) {
+      if (output_data[i] != expected_data[i]) {
         return false;
       }
     }
@@ -80,7 +81,7 @@ class KulikovMatrixMultiplyRunPerfTests : public ppc::util::BaseRunPerfTests<InT
   }
 
   InType GetTestInputData() final {
-    return input_data_;
+    return input_data;
   }
 };
 

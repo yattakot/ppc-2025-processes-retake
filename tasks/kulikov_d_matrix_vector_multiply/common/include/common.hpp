@@ -2,6 +2,8 @@
 
 #include <string>
 #include <tuple>
+#include <vector>
+#include <cstddef>
 
 #include "task/include/task.hpp"
 
@@ -10,8 +12,8 @@ namespace kulikov_d_matrix_vector_multiply {
 using ValueType = int;
 
 struct MatrixType {
-  int rows;
-  int cols;
+  int rows = 0;
+  int cols = 0;
   std::vector<ValueType> matrix;
   std::vector<ValueType> vector;
 };

@@ -1,6 +1,5 @@
 #include "kulikov_d_matrix_vector_multiply/seq/include/ops_seq.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <vector>
 
