@@ -1,6 +1,5 @@
 #include "kulikov_d_matrix_vector_multiply/mpi/include/ops_mpi.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <vector>
 
@@ -46,7 +45,8 @@ bool KulikovDMatrixMultiplyMPI::PreProcessingImpl() {
 
 bool KulikovDMatrixMultiplyMPI::RunImpl() {
   const auto &input = GetInput();
-  int rank, size;
+  int rank = 0;
+  int size = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
@@ -54,14 +54,17 @@ bool KulikovDMatrixMultiplyMPI::RunImpl() {
   int cols = input.cols;
 
   std::vector<int> vec(cols);
-  if (rank == 0) vec = input.vector;
+  if (rank == 0) {
+    vec = input.vector;
+  }
+
   MPI_Bcast(vec.data(), cols, MPI_INT, 0, MPI_COMM_WORLD);
 
   int base_rows = rows / size;
   int remainder = rows % size;
   int local_rows = base_rows + (rank < remainder ? 1 : 0);
 
-  std::vector<int> local_matrix(local_rows * cols);
+  std::vector<int> local_matrix(static_cast<size_t>(local_rows) * static_cast<size_t>(cols));
 
   if (rank == 0) {
     std::vector<int> send_counts(size, base_rows * cols);
@@ -85,18 +88,24 @@ bool KulikovDMatrixMultiplyMPI::RunImpl() {
   for (int i = 0; i < local_rows; ++i) {
     int sum = 0;
     for (int j = 0; j < cols; ++j) {
-      sum += local_matrix[i * cols + j] * vec[j];
+      sum += local_matrix[(i * cols) + j] * vec[j];
     }
     local_result[i] = sum;
   }
 
   std::vector<int> recv_counts(size, base_rows);
-  for (int proc = 0; proc < remainder; ++proc) recv_counts[proc] += 1;
+  for (int proc = 0; proc < remainder; ++proc) {
+    recv_counts[proc] += 1;
+  }
 
   std::vector<int> displs(size, 0);
-  for (int i = 1; i < size; ++i) displs[i] = displs[i-1] + recv_counts[i-1];
+  for (int i = 1; i < size; ++i) {
+    displs[i] = displs[i - 1] + recv_counts[i - 1];
+  }
 
-  if (rank == 0) GetOutput().assign(rows, 0);
+  if (rank == 0) {
+    GetOutput().assign(rows, 0);
+  }
 
   MPI_Gatherv(local_result.data(), local_rows, MPI_INT,
               GetOutput().data(), recv_counts.data(), displs.data(), MPI_INT,
