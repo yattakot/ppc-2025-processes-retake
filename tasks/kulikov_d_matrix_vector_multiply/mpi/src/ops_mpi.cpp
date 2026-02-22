@@ -1,9 +1,9 @@
 #include "kulikov_d_matrix_vector_multiply/mpi/include/ops_mpi.hpp"
 
+#include <mpi.h>
+
 #include <cstddef>
 #include <vector>
-
-#include <mpi.h>
 
 #include "kulikov_d_matrix_vector_multiply/common/include/common.hpp"
 
@@ -73,15 +73,13 @@ bool KulikovDMatrixMultiplyMPI::RunImpl() {
       send_counts[proc] = (base_rows + 1) * cols;
     }
     for (int i = 1; i < size; ++i) {
-      send_displs[i] = send_displs[i-1] + send_counts[i-1];
+      send_displs[i] = send_displs[i - 1] + send_counts[i - 1];
     }
-    MPI_Scatterv(input.matrix.data(), send_counts.data(), send_displs.data(), MPI_INT,
-                 local_matrix.data(), local_rows * cols, MPI_INT,
-                 0, MPI_COMM_WORLD);
+    MPI_Scatterv(input.matrix.data(), send_counts.data(), send_displs.data(), MPI_INT, local_matrix.data(),
+                 local_rows * cols, MPI_INT, 0, MPI_COMM_WORLD);
   } else {
-    MPI_Scatterv(nullptr, nullptr, nullptr, MPI_INT,
-                 local_matrix.data(), local_rows * cols, MPI_INT,
-                 0, MPI_COMM_WORLD);
+    MPI_Scatterv(nullptr, nullptr, nullptr, MPI_INT, local_matrix.data(), local_rows * cols, MPI_INT, 0,
+                 MPI_COMM_WORLD);
   }
 
   std::vector<int> local_result(local_rows, 0);
@@ -107,8 +105,7 @@ bool KulikovDMatrixMultiplyMPI::RunImpl() {
     GetOutput().assign(rows, 0);
   }
 
-  MPI_Gatherv(local_result.data(), local_rows, MPI_INT,
-              GetOutput().data(), recv_counts.data(), displs.data(), MPI_INT,
+  MPI_Gatherv(local_result.data(), local_rows, MPI_INT, GetOutput().data(), recv_counts.data(), displs.data(), MPI_INT,
               0, MPI_COMM_WORLD);
 
   return true;
