@@ -1,16 +1,16 @@
 #pragma once
 
-#include "kulikov_d_matrix_vector_multiply/common/include/common.hpp"
+#include "kulikov_d_dejkstra_crs/common/include/common.hpp"
 #include "task/include/task.hpp"
 
-namespace kulikov_d_matrix_vector_multiply {
+namespace kulikov_d_dejkstra_crs {
 
-class KulikovDMatrixMultiplySEQ : public BaseTask {
+class KulikovDDijkstraCRSSEQ : public BaseTask {
  public:
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
     return ppc::task::TypeOfTask::kSEQ;
   }
-  explicit KulikovDMatrixMultiplySEQ(const InType &in);
+  explicit KulikovDDijkstraCRSSEQ(const InType &in);
 
  private:
   bool ValidationImpl() override;
@@ -19,4 +19,4 @@ class KulikovDMatrixMultiplySEQ : public BaseTask {
   bool PostProcessingImpl() override;
 };
 
-}  // namespace kulikov_d_matrix_vector_multiply
+}  // namespace kulikov_d_dejkstra_crs

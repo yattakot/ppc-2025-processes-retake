@@ -1,16 +1,18 @@
 #pragma once
 
-#include "kulikov_d_matrix_vector_multiply/common/include/common.hpp"
+#include <vector>
+
+#include "kulikov_d_dejkstra_crs/common/include/common.hpp"
 #include "task/include/task.hpp"
 
-namespace kulikov_d_matrix_vector_multiply {
+namespace kulikov_d_dejkstra_crs {
 
-class KulikovDMatrixMultiplyMPI : public BaseTask {
+class KulikovDDijkstraCRSMPI : public BaseTask {
  public:
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
     return ppc::task::TypeOfTask::kMPI;
   }
-  explicit KulikovDMatrixMultiplyMPI(const InType &in);
+  explicit KulikovDDijkstraCRSMPI(const InType &in);
 
  private:
   bool ValidationImpl() override;
@@ -18,5 +20,4 @@ class KulikovDMatrixMultiplyMPI : public BaseTask {
   bool RunImpl() override;
   bool PostProcessingImpl() override;
 };
-
-}  // namespace kulikov_d_matrix_vector_multiply
+}
