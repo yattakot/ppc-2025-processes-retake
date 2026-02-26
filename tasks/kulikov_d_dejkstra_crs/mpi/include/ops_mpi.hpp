@@ -20,4 +20,4 @@ class KulikovDDijkstraCRSMPI : public BaseTask {
   bool RunImpl() override;
   bool PostProcessingImpl() override;
 };
-}
+}  // namespace kulikov_d_dejkstra_crs
