@@ -32,13 +32,10 @@ VertexRange ComputeLocalRange(int rank, int size, int total_vertices) {
   const int extra = total_vertices % size;
   const int local_count = base_count + (rank < extra ? 1 : 0);
 
-  const int start = (rank < extra)
-                        ? rank * (base_count + 1)
-                        : extra * (base_count + 1) + (rank - extra) * base_count;
+  const int start = (rank < extra) ? rank * (base_count + 1) : extra * (base_count + 1) + (rank - extra) * base_count;
 
   return {start, start + local_count};
 }
-
 
 struct LocalEdges {
   std::vector<int> columns;
@@ -59,28 +56,22 @@ LocalEdges ExtractLocalEdges(const GraphData &graph, const VertexRange &range) {
   const int local_edge_count = global_edge_end - global_edge_start;
 
   if (local_edge_count > 0) {
-    result.columns.assign(
-        graph.columns.begin() + global_edge_start,
-        graph.columns.begin() + global_edge_end);
-    result.weights.assign(
-        graph.values.begin() + global_edge_start,
-        graph.values.begin() + global_edge_end);
+    result.columns.assign(graph.columns.begin() + global_edge_start, graph.columns.begin() + global_edge_end);
+    result.weights.assign(graph.values.begin() + global_edge_start, graph.values.begin() + global_edge_end);
   }
 
   result.offsets.resize(range.count + 1);
   for (int i = 0; i <= range.count; ++i) {
     const int global_idx = range.start + i;
-    const int global_offset = (global_idx <= graph.num_vertices)
-                                  ? graph.offsets[global_idx]
-                                  : graph.offsets[graph.num_vertices];
+    const int global_offset =
+        (global_idx <= graph.num_vertices) ? graph.offsets[global_idx] : graph.offsets[graph.num_vertices];
     result.offsets[i] = global_offset - global_edge_start;
   }
 
   return result;
 }
 
-void InitializeDistances(std::vector<double> &distances, int total_vertices,
-                         int source, int source_owner_rank) {
+void InitializeDistances(std::vector<double> &distances, int total_vertices, int source, int source_owner_rank) {
   distances.assign(total_vertices, std::numeric_limits<double>::infinity());
 
   if (source_owner_rank >= 0 && source >= 0 && source < total_vertices) {
@@ -88,9 +79,8 @@ void InitializeDistances(std::vector<double> &distances, int total_vertices,
   }
 }
 
-bool RelaxVertexEdges(double current_dist,
-                      const LocalEdges &local_edges, int local_index,
-                      int total_vertices, std::vector<double> &candidate_dist) {
+bool RelaxVertexEdges(double current_dist, const LocalEdges &local_edges, int local_index, int total_vertices,
+                      std::vector<double> &candidate_dist) {
   if (local_index < 0 || local_index + 1 >= static_cast<int>(local_edges.offsets.size())) {
     return false;
   }
@@ -117,10 +107,8 @@ bool RelaxVertexEdges(double current_dist,
   return improved;
 }
 
-bool PerformLocalRelaxation(const std::vector<double> &current_dist,
-                            const LocalEdges &local_edges,
-                            const VertexRange &range, int total_vertices,
-                            std::vector<double> &candidate_dist) {
+bool PerformLocalRelaxation(const std::vector<double> &current_dist, const LocalEdges &local_edges,
+                            const VertexRange &range, int total_vertices, std::vector<double> &candidate_dist) {
   bool any_improved = false;
 
   for (int local_idx = 0; local_idx < range.count; ++local_idx) {
@@ -131,20 +119,15 @@ bool PerformLocalRelaxation(const std::vector<double> &current_dist,
       continue;
     }
 
-    any_improved = RelaxVertexEdges(dist, local_edges, local_idx,
-                                    total_vertices, candidate_dist) ||
-                   any_improved;
+    any_improved = RelaxVertexEdges(dist, local_edges, local_idx, total_vertices, candidate_dist) || any_improved;
   }
 
   return any_improved;
 }
 
-void SynchronizeDistances(std::vector<double> &global_dist,
-                          std::vector<double> &local_buffer,
-                          MPI_Comm comm) {
-  MPI_Allreduce(local_buffer.data(), global_dist.data(),
-                static_cast<int>(global_dist.size()),
-                MPI_DOUBLE, MPI_MIN, comm);
+void SynchronizeDistances(std::vector<double> &global_dist, std::vector<double> &local_buffer, MPI_Comm comm) {
+  MPI_Allreduce(local_buffer.data(), global_dist.data(), static_cast<int>(global_dist.size()), MPI_DOUBLE, MPI_MIN,
+                comm);
 
   std::copy(global_dist.begin(), global_dist.end(), local_buffer.begin());
 }
@@ -169,8 +152,7 @@ bool KulikovDDijkstraCRSMPI::ValidationImpl() {
   if (graph.offsets.size() != static_cast<size_t>(graph.num_vertices) + 1) {
     return false;
   }
-  if (!graph.offsets.empty() &&
-      graph.offsets.back() > static_cast<int>(graph.columns.size())) {
+  if (!graph.offsets.empty() && graph.offsets.back() > static_cast<int>(graph.columns.size())) {
     return false;
   }
 
@@ -212,17 +194,15 @@ bool KulikovDDijkstraCRSMPI::RunImpl() {
   InitializeDistances(global_dist, total_vertices, source, global_source_owner);
 
   if (global_source_owner >= 0) {
-    MPI_Bcast(global_dist.data(), total_vertices, MPI_DOUBLE,
-              global_source_owner, MPI_COMM_WORLD);
+    MPI_Bcast(global_dist.data(), total_vertices, MPI_DOUBLE, global_source_owner, MPI_COMM_WORLD);
   }
 
   std::vector<double> local_dist = global_dist;
   std::vector<double> candidate_dist = global_dist;
 
   for (int iteration = 0; iteration < total_vertices - 1; ++iteration) {
-
-    const bool local_improved = PerformLocalRelaxation(
-        local_dist, local_edges, local_range, total_vertices, candidate_dist);
+    const bool local_improved =
+        PerformLocalRelaxation(local_dist, local_edges, local_range, total_vertices, candidate_dist);
 
     int global_improved = 0;
     MPI_Allreduce(&local_improved, &global_improved, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);

@@ -26,8 +26,8 @@ struct QueueEntry {
   }
 };
 
-void RelaxOutgoingEdges(VertexId current_vertex, Distance current_distance,
-                        const GraphData &graph, std::vector<Distance> &distances,
+void RelaxOutgoingEdges(VertexId current_vertex, Distance current_distance, const GraphData &graph,
+                        std::vector<Distance> &distances,
                         std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<>> &queue) {
   const EdgeIndex edge_start = graph.offsets[current_vertex];
   const EdgeIndex edge_end = graph.offsets[current_vertex + 1];
@@ -62,8 +62,7 @@ bool KulikovDDijkstraCRSSEQ::ValidationImpl() {
   if (graph.offsets.size() != static_cast<size_t>(graph.num_vertices) + 1) {
     return false;
   }
-  if (!graph.offsets.empty() &&
-      graph.offsets.back() > static_cast<EdgeIndex>(graph.columns.size())) {
+  if (!graph.offsets.empty() && graph.offsets.back() > static_cast<EdgeIndex>(graph.columns.size())) {
     return false;
   }
 
