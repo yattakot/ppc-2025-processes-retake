@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <ranges>
+#include <utility>
 #include <vector>
 
 #include "kulikov_d_dejkstra_crs/common/include/common.hpp"
@@ -32,7 +34,8 @@ VertexRange ComputeLocalRange(int rank, int size, int total_vertices) {
   const int extra = total_vertices % size;
   const int local_count = base_count + (rank < extra ? 1 : 0);
 
-  const int start = (rank < extra) ? rank * (base_count + 1) : extra * (base_count + 1) + (rank - extra) * base_count;
+  const int start =
+      (rank < extra) ? rank * (base_count + 1) : (extra * (base_count + 1)) + ((rank - extra) * base_count);
 
   return {start, start + local_count};
 }
@@ -89,9 +92,9 @@ bool RelaxVertexEdges(double current_dist, const LocalEdges &local_edges, int lo
   const int edge_start = local_edges.offsets[local_index];
   const int edge_end = local_edges.offsets[local_index + 1];
 
-  for (int e = edge_start; e < edge_end; ++e) {
-    const int neighbor = local_edges.columns[e];
-    const double weight = local_edges.weights[e];
+  for (int edge_idx = edge_start; edge_idx < edge_end; ++edge_idx) {
+    const int neighbor = local_edges.columns[edge_idx];
+    const double weight = local_edges.weights[edge_idx];
 
     if (neighbor < 0 || neighbor >= total_vertices) {
       continue;
@@ -129,7 +132,7 @@ void SynchronizeDistances(std::vector<double> &global_dist, std::vector<double> 
   MPI_Allreduce(local_buffer.data(), global_dist.data(), static_cast<int>(global_dist.size()), MPI_DOUBLE, MPI_MIN,
                 comm);
 
-  std::copy(global_dist.begin(), global_dist.end(), local_buffer.begin());
+  std::ranges::copy(global_dist, local_buffer.begin());
 }
 
 }  // namespace
@@ -152,7 +155,7 @@ bool KulikovDDijkstraCRSMPI::ValidationImpl() {
   if (graph.offsets.size() != static_cast<size_t>(graph.num_vertices) + 1) {
     return false;
   }
-  if (!graph.offsets.empty() && graph.offsets.back() > static_cast<int>(graph.columns.size())) {
+  if (!graph.offsets.empty() && std::cmp_greater(graph.offsets.back(), graph.columns.size())) {
     return false;
   }
 
@@ -201,11 +204,11 @@ bool KulikovDDijkstraCRSMPI::RunImpl() {
   std::vector<double> candidate_dist = global_dist;
 
   for (int iteration = 0; iteration < total_vertices - 1; ++iteration) {
-    const bool local_improved =
-        PerformLocalRelaxation(local_dist, local_edges, local_range, total_vertices, candidate_dist);
+    int local_improved_int =
+        PerformLocalRelaxation(local_dist, local_edges, local_range, total_vertices, candidate_dist) ? 1 : 0;
 
     int global_improved = 0;
-    MPI_Allreduce(&local_improved, &global_improved, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(&local_improved_int, &global_improved, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
     if (global_improved == 0) {
       break;

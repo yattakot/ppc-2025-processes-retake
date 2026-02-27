@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 #include "kulikov_d_dejkstra_crs/common/include/common.hpp"
 #include "task/include/task.hpp"
 
