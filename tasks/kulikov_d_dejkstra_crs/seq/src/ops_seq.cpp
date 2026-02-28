@@ -9,11 +9,6 @@
 
 #include "kulikov_d_dejkstra_crs/common/include/common.hpp"
 
-#ifdef __GNUC__
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wnull-dereference"
-#endif
-
 namespace kulikov_d_dejkstra_crs {
 
 using Distance = double;
@@ -116,7 +111,3 @@ bool KulikovDDijkstraCRSSEQ::PostProcessingImpl() {
 }
 
 }  // namespace kulikov_d_dejkstra_crs
-
-#ifdef __GNUC__
-#  pragma GCC diagnostic pop
-#endif
