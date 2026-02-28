@@ -2,6 +2,7 @@
 
 #include <mpi.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -9,11 +10,6 @@
 #include <vector>
 
 #include "kulikov_d_dejkstra_crs/common/include/common.hpp"
-
-#ifdef __GNUC__
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wnull-dereference"
-#endif
 
 namespace kulikov_d_dejkstra_crs {
 
@@ -33,12 +29,11 @@ VertexRange ComputeLocalRange(int rank, int size, int total_vertices) {
     return {0, 0};
   }
 
-  const int base_count = total_vertices / size;
+  const int base = total_vertices / size;
   const int extra = total_vertices % size;
-  const int local_count = base_count + (rank < extra ? 1 : 0);
+  const int local_count = base + (rank < extra ? 1 : 0);
 
-  const int start =
-      (rank < extra) ? rank * (base_count + 1) : (extra * (base_count + 1)) + ((rank - extra) * base_count);
+  const int start = (rank < extra) ? rank * (base + 1) : extra * (base + 1) + (rank - extra) * base;
 
   return {start, start + local_count};
 }
@@ -59,53 +54,50 @@ LocalEdges ExtractLocalEdges(const GraphData &graph, const VertexRange &range) {
 
   const int global_edge_start = graph.offsets[range.start];
   const int global_edge_end = graph.offsets[range.end];
-  const int local_edge_count = global_edge_end - global_edge_start;
 
-  if (local_edge_count > 0) {
+  if (global_edge_end > global_edge_start) {
     result.columns.assign(graph.columns.begin() + global_edge_start, graph.columns.begin() + global_edge_end);
     result.weights.assign(graph.values.begin() + global_edge_start, graph.values.begin() + global_edge_end);
   }
 
   result.offsets.resize(range.count + 1);
   for (int i = 0; i <= range.count; ++i) {
-    const int global_idx = range.start + i;
-    const int global_offset =
-        (global_idx <= graph.num_vertices) ? graph.offsets[global_idx] : graph.offsets[graph.num_vertices];
-    result.offsets[i] = global_offset - global_edge_start;
+    const int global_v = range.start + i;
+    const int off = (global_v <= graph.num_vertices) ? graph.offsets[global_v] : graph.offsets[graph.num_vertices];
+    result.offsets[i] = off - global_edge_start;
   }
 
   return result;
 }
 
-void InitializeDistances(std::vector<double> &distances, int total_vertices, int source, int source_owner_rank) {
-  distances.assign(total_vertices, std::numeric_limits<double>::infinity());
-
-  if (source_owner_rank >= 0 && source >= 0 && source < total_vertices) {
-    distances[source] = 0.0;
+void InitializeDistances(std::vector<double> &dist, int total_vertices, int source, int source_owner) {
+  dist.assign(total_vertices, std::numeric_limits<double>::infinity());
+  if (source_owner >= 0 && source >= 0 && source < total_vertices) {
+    dist[source] = 0.0;
   }
 }
 
-bool RelaxVertexEdges(double current_dist, const LocalEdges &local_edges, int local_index, int total_vertices,
-                      std::vector<double> &candidate_dist) {
-  if (local_index < 0 || local_index + 1 >= static_cast<int>(local_edges.offsets.size())) {
+bool RelaxVertexEdges(double current_dist, const LocalEdges &edges, int local_idx, int total_vertices,
+                      std::vector<double> &candidate) {
+  if (local_idx + 1 >= static_cast<int>(edges.offsets.size())) {
     return false;
   }
 
   bool improved = false;
-  const int edge_start = local_edges.offsets[local_index];
-  const int edge_end = local_edges.offsets[local_index + 1];
+  const int begin = edges.offsets[local_idx];
+  const int end = edges.offsets[local_idx + 1];
 
-  for (int edge_idx = edge_start; edge_idx < edge_end; ++edge_idx) {
-    const int neighbor = local_edges.columns[edge_idx];
-    const double weight = local_edges.weights[edge_idx];
+  for (int i = begin; i < end; ++i) {
+    const int to = edges.columns[i];
+    const double w = edges.weights[i];
 
-    if (neighbor < 0 || neighbor >= total_vertices) {
+    if (to < 0 || to >= total_vertices) {
       continue;
     }
 
-    const double new_dist = current_dist + weight;
-    if (new_dist < candidate_dist[neighbor]) {
-      candidate_dist[neighbor] = new_dist;
+    const double new_dist = current_dist + w;
+    if (new_dist < candidate[to]) {
+      candidate[to] = new_dist;
       improved = true;
     }
   }
@@ -113,32 +105,34 @@ bool RelaxVertexEdges(double current_dist, const LocalEdges &local_edges, int lo
   return improved;
 }
 
-bool PerformLocalRelaxation(const std::vector<double> &current_dist, const LocalEdges &local_edges,
-                            const VertexRange &range, int total_vertices, std::vector<double> &candidate_dist) {
-  bool any_improved = false;
+bool PerformLocalRelaxation(const std::vector<double> &current, const LocalEdges &edges, const VertexRange &range,
+                            int total_vertices, std::vector<double> &candidate) {
+  bool any = false;
 
-  for (int local_idx = 0; local_idx < range.count; ++local_idx) {
-    const int global_v = range.start + local_idx;
-    const double dist = current_dist[global_v];
-
-    if (std::isinf(dist)) {
+  for (int i = 0; i < range.count; ++i) {
+    const int v = range.start + i;
+    if (std::isinf(current[v])) {
       continue;
     }
 
-    any_improved = RelaxVertexEdges(dist, local_edges, local_idx, total_vertices, candidate_dist) || any_improved;
+    any = RelaxVertexEdges(current[v], edges, i, total_vertices, candidate) || any;
   }
 
-  return any_improved;
+  return any;
 }
 
-void SynchronizeDistances(std::vector<double> &global_dist, std::vector<double> &local_buffer, MPI_Comm comm) {
+void SynchronizeDistances(std::vector<double> &global_dist, std::vector<double> &local_buf, MPI_Comm comm) {
   if (global_dist.empty()) {
     return;
   }
 
-  MPI_Allreduce(local_buffer.data(), global_dist.data(), static_cast<int>(global_dist.size()), MPI_DOUBLE, MPI_MIN,
-                comm);
-  local_buffer = global_dist;
+  if (local_buf.size() != global_dist.size()) {
+    local_buf.resize(global_dist.size());
+  }
+
+  MPI_Allreduce(local_buf.data(), global_dist.data(), static_cast<int>(global_dist.size()), MPI_DOUBLE, MPI_MIN, comm);
+
+  std::copy(global_dist.begin(), global_dist.end(), local_buf.begin());
 }
 
 }  // namespace
@@ -150,18 +144,18 @@ KulikovDDijkstraCRSMPI::KulikovDDijkstraCRSMPI(const InType &input) {
 }
 
 bool KulikovDDijkstraCRSMPI::ValidationImpl() {
-  const GraphData &graph = GetInput();
+  const GraphData &g = GetInput();
 
-  if (graph.num_vertices <= 0) {
+  if (g.num_vertices <= 0) {
     return false;
   }
-  if (graph.source_vertex < 0 || graph.source_vertex >= graph.num_vertices) {
+  if (g.source_vertex < 0 || g.source_vertex >= g.num_vertices) {
     return false;
   }
-  if (graph.offsets.size() != static_cast<size_t>(graph.num_vertices) + 1) {
+  if (g.offsets.size() != static_cast<size_t>(g.num_vertices) + 1) {
     return false;
   }
-  if (!graph.offsets.empty() && std::cmp_greater(graph.offsets.back(), graph.columns.size())) {
+  if (!g.offsets.empty() && static_cast<size_t>(g.offsets.back()) > g.columns.size()) {
     return false;
   }
 
@@ -174,59 +168,57 @@ bool KulikovDDijkstraCRSMPI::PreProcessingImpl() {
 
 bool KulikovDDijkstraCRSMPI::RunImpl() {
   const GraphData &graph = GetInput();
-  const int total_vertices = graph.num_vertices;
+  const int n = graph.num_vertices;
   const int source = graph.source_vertex;
 
-  if (total_vertices <= 0) {
+  if (n <= 0) {
     GetOutput().clear();
     MPI_Barrier(MPI_COMM_WORLD);
     return true;
   }
 
-  int mpi_rank = 0;
-  int mpi_size = 0;
-  MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
+  int rank = 0, size = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-  const VertexRange local_range = ComputeLocalRange(mpi_rank, mpi_size, total_vertices);
+  const VertexRange range = ComputeLocalRange(rank, size, n);
+  LocalEdges local_edges = ExtractLocalEdges(graph, range);
 
-  LocalEdges local_edges = ExtractLocalEdges(graph, local_range);
+  const bool owns_source = source >= range.start && source < range.end;
 
-  const bool owns_source = (source >= local_range.start && source < local_range.end);
-
-  int source_owner = owns_source ? mpi_rank : -1;
-
-  int global_source_owner = -1;
-  MPI_Allreduce(&source_owner, &global_source_owner, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+  int local_owner = owns_source ? rank : -1;
+  int global_owner = -1;
+  MPI_Allreduce(&local_owner, &global_owner, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
   std::vector<double> global_dist;
-  InitializeDistances(global_dist, total_vertices, source, global_source_owner);
+  InitializeDistances(global_dist, n, source, global_owner);
 
-  if (global_source_owner >= 0) {
-    MPI_Bcast(global_dist.data(), total_vertices, MPI_DOUBLE, global_source_owner, MPI_COMM_WORLD);
+  if (global_owner >= 0) {
+    MPI_Bcast(global_dist.data(), n, MPI_DOUBLE, global_owner, MPI_COMM_WORLD);
   }
 
-  std::vector<double> local_dist = global_dist;
-  std::vector<double> candidate_dist = global_dist;
+  std::vector<double> local_dist(n);
+  std::vector<double> candidate_dist(n);
 
-  for (int iteration = 0; iteration < total_vertices - 1; ++iteration) {
-    int local_improved_int =
-        PerformLocalRelaxation(local_dist, local_edges, local_range, total_vertices, candidate_dist) ? 1 : 0;
+  std::copy(global_dist.begin(), global_dist.end(), local_dist.begin());
+  std::copy(global_dist.begin(), global_dist.end(), candidate_dist.begin());
+
+  for (int iter = 0; iter < n - 1; ++iter) {
+    const int local_improved = PerformLocalRelaxation(local_dist, local_edges, range, n, candidate_dist) ? 1 : 0;
 
     int global_improved = 0;
-    MPI_Allreduce(&local_improved_int, &global_improved, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(&local_improved, &global_improved, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
     if (global_improved == 0) {
       break;
     }
 
     SynchronizeDistances(global_dist, candidate_dist, MPI_COMM_WORLD);
-    local_dist = global_dist;
+    std::copy(global_dist.begin(), global_dist.end(), local_dist.begin());
   }
 
   GetOutput() = std::move(global_dist);
   MPI_Barrier(MPI_COMM_WORLD);
-
   return true;
 }
 
@@ -235,7 +227,3 @@ bool KulikovDDijkstraCRSMPI::PostProcessingImpl() {
 }
 
 }  // namespace kulikov_d_dejkstra_crs
-
-#ifdef __GNUC__
-#  pragma GCC diagnostic pop
-#endif
